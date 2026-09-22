@@ -196,6 +196,18 @@ describe('Before Update Lifecycle Callback ::', function() {
       });
     });
 
+    it('should serialize to its options rather than to undefined', function(done) {
+      ctx.person.update({ id: 1 }, { name: 'test' }, function(err) {
+        if (err) {
+          return done(err);
+        }
+
+        var asJson = JSON.parse(JSON.stringify(observedOptions));
+        assert.deepEqual(asJson.criteria.where, { id: 1 });
+        return done();
+      });
+    });
+
     it('should not run beforeUpdate when skipAllLifecycleCallbacks is true', function(done) {
       ctx.person.update({ id: 1 }, { name: 'test' })
         .meta({ skipAllLifecycleCallbacks: true })
@@ -247,6 +259,105 @@ describe('Before Update Lifecycle Callback ::', function() {
         assert.equal(ctx.lastQuery, undefined, 'the adapter should never have been called');
         return done();
       });
+    });
+  });
+
+  // `Function#length` under-reports for the next two declarations - it stops at the
+  // first defaulted parameter and ignores rest parameters. A signature sniff would
+  // route them to the two-parameter path, where the callback that continues the
+  // query lands in `options` and the update never finishes.
+  describe('Update with a three-argument callback whose last parameter is defaulted ::', function() {
+    var ctx;
+    var observedOptions;
+    var timesDefaultUsed;
+
+    before(function(done) {
+      var noop = function() { timesDefaultUsed++; };
+      ctx = buildOrm(function(valuesToSet, options, cb = noop) {
+        observedOptions = options;
+        valuesToSet.name = valuesToSet.name + ' updated';
+        return cb();
+      }, done);
+    });
+
+    beforeEach(function() {
+      observedOptions = undefined;
+      timesDefaultUsed = 0;
+      ctx.lastQuery = undefined;
+    });
+
+    it('should still receive the options dictionary and finish the update', function(done) {
+      ctx.person.update({ id: 1 }, { name: 'test' }, function(err, records) {
+        if (err) {
+          return done(err);
+        }
+
+        assert.deepEqual(observedOptions.criteria.where, { id: 1 });
+        assert.equal(timesDefaultUsed, 0, 'the real callback should have been passed, not the default');
+        assert.equal(records[0].name, 'test updated');
+        return done();
+      });
+    });
+  });
+
+  describe('Update with a callback declared with no formal parameters ::', function() {
+    var ctx;
+    var observedOptions;
+
+    before(function(done) {
+      ctx = buildOrm(function() {
+        var valuesToSet = arguments[0];
+        var cb = arguments[2];
+        observedOptions = arguments[1];
+        valuesToSet.name = valuesToSet.name + ' updated';
+        return cb();
+      }, done);
+    });
+
+    beforeEach(function() {
+      observedOptions = undefined;
+      ctx.lastQuery = undefined;
+    });
+
+    it('should still receive the options dictionary and finish the update', function(done) {
+      ctx.person.update({ id: 1 }, { name: 'test' }, function(err, records) {
+        if (err) {
+          return done(err);
+        }
+
+        assert.deepEqual(observedOptions.criteria.where, { id: 1 });
+        assert.equal(records[0].name, 'test updated');
+        return done();
+      });
+    });
+  });
+
+  describe('Update when the callback continues twice ::', function() {
+    var ctx;
+
+    before(function(done) {
+      ctx = buildOrm(function(valuesToSet, options, cb) {
+        cb();
+        // The dictionary is also the legacy continuation, so calling it is a
+        // second continuation of the same query. It must be ignored.
+        return options();
+      }, done);
+    });
+
+    it('should only continue the query once', function(done) {
+      var timesFinished = 0;
+
+      ctx.person.update({ id: 1 }, { name: 'test' }, function() {
+        timesFinished++;
+      });
+
+      // Assert from a timer rather than from the query callback, so that a
+      // duplicate continuation shows up as a count rather than as a second
+      // `done()`.
+      setTimeout(function() {
+        assert.equal(timesFinished, 1);
+        return done();
+      }, 30);
     });
   });
 
