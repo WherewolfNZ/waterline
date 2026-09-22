@@ -1,0 +1,18 @@
+{
+  "folders": [
+    {
+      "path": ".",
+    },
+  ],
+  "settings": {
+    "cSpell.words": [],
+    "workbench.colorCustomizations": {
+      "titleBar.activeBackground": "#023ad6",
+      "tab.activeBorder": "#1cd9ff",
+    },
+    "window.titleBarStyle": "custom",
+    "js/ts.preferGoToSourceDefinition": true,
+    "js/ts.suggest.autoImports": false,
+    "js/ts.tsdk.path": "node_modules/typescript/lib",
+  },
+}
