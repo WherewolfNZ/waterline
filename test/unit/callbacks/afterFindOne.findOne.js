@@ -136,19 +136,59 @@ describe('After FindOne Lifecycle Callback on findOne ::', function() {
       observedRecord = 'not yet called';
     });
 
-    // NOTE: the callback still runs when nothing matched, and is handed `undefined`
-    // rather than a record. An `afterFindOne` that dereferences its first argument
-    // must therefore guard for that, or it will throw on every miss.
-    it('should still run afterFindOne, with an undefined record', function(done) {
+    it('should not run afterFindOne at all', function(done) {
       person.findOne({ id: 99 }, { }, function(err, record) {
         if (err) {
           return done(err);
         }
 
-        assert.equal(timesCalled, 1);
-        assert.equal(observedRecord, undefined);
+        assert.equal(timesCalled, 0);
+        assert.equal(observedRecord, 'not yet called');
         assert.equal(record, undefined);
         return done();
+      });
+    });
+
+    it('should not throw when the callback dereferences the record', function(done) {
+      // The point of the guard: this is the ordinary shape of an afterFindOne,
+      // and before the guard it threw on every miss.
+      var waterline = new Waterline();
+      var Model = Waterline.Model.extend({
+        identity: 'user',
+        datastore: 'foo',
+        primaryKey: 'id',
+        attributes: {
+          id: {
+            type: 'number'
+          },
+          name: {
+            type: 'string'
+          }
+        },
+
+        afterFindOne: function(record, cb) {
+          record.name = record.name + ' updated';
+          return cb();
+        }
+      });
+
+      waterline.registerModel(Model);
+
+      var adapterDef = { find: function(con, query, cb) { return cb(null, []); }};
+
+      waterline.initialize({ adapters: { foobar: adapterDef }, datastores: { foo: { adapter: 'foobar' } } }, function(err, orm) {
+        if (err) {
+          return done(err);
+        }
+
+        orm.collections.user.findOne({ id: 99 }, { }, function(err, record) {
+          if (err) {
+            return done(err);
+          }
+
+          assert.equal(record, undefined);
+          return done();
+        });
       });
     });
   });
