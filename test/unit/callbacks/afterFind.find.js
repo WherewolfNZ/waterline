@@ -105,4 +105,116 @@ describe('After Find Lifecycle Callback ::', function() {
         });
     });
   });
+
+  describe('No matching records ::', function() {
+    var person;
+    var observedResults;
+
+    before(function(done) {
+      var waterline = new Waterline();
+      var Model = Waterline.Model.extend({
+        identity: 'user',
+        datastore: 'foo',
+        primaryKey: 'id',
+        attributes: {
+          id: {
+            type: 'number'
+          },
+          name: {
+            type: 'string'
+          }
+        },
+
+        afterFind: function(results, cb) {
+          observedResults = results;
+          return cb();
+        }
+      });
+
+      waterline.registerModel(Model);
+
+      // Fixture Adapter Def
+      var adapterDef = { find: function(con, query, cb) { return cb(null, []); }};
+
+      var connections = {
+        'foo': {
+          adapter: 'foobar'
+        }
+      };
+
+      waterline.initialize({ adapters: { foobar: adapterDef }, datastores: connections }, function(err, orm) {
+        if (err) {
+          return done(err);
+        }
+        person = orm.collections.user;
+        return done();
+      });
+    });
+
+    it('should still run afterFind, with an empty array', function(done) {
+      person.find({ id: 99 }, {}, function(err, results) {
+        if (err) {
+          return done(err);
+        }
+
+        assert(_.isArray(observedResults));
+        assert.equal(observedResults.length, 0);
+        assert.equal(results.length, 0);
+        return done();
+      });
+    });
+  });
+
+  describe('When afterFind errors ::', function() {
+    var person;
+
+    before(function(done) {
+      var waterline = new Waterline();
+      var Model = Waterline.Model.extend({
+        identity: 'user',
+        datastore: 'foo',
+        primaryKey: 'id',
+        attributes: {
+          id: {
+            type: 'number'
+          },
+          name: {
+            type: 'string'
+          }
+        },
+
+        afterFind: function(results, cb) {
+          return cb(new Error('Whoops, afterFind'));
+        }
+      });
+
+      waterline.registerModel(Model);
+
+      // Fixture Adapter Def
+      var adapterDef = { find: function(con, query, cb) { return cb(null, [{ id: 1, name: 'John Doe' }]); }};
+
+      var connections = {
+        'foo': {
+          adapter: 'foobar'
+        }
+      };
+
+      waterline.initialize({ adapters: { foobar: adapterDef }, datastores: connections }, function(err, orm) {
+        if (err) {
+          return done(err);
+        }
+        person = orm.collections.user;
+        return done();
+      });
+    });
+
+    it('should surface the error instead of the records', function(done) {
+      person.find({}, {}, function(err, results) {
+        assert(err);
+        assert.equal(err.message, 'Whoops, afterFind');
+        assert.equal(results, undefined);
+        return done();
+      });
+    });
+  });
 });
