@@ -224,6 +224,88 @@ describe('Before Update Lifecycle Callback ::', function() {
     });
   });
 
+  // The options dictionary hands over the live criteria and meta, not copies, so a
+  // three-argument `beforeUpdate` can rewrite what the adapter is then asked to do -
+  // narrowing an update to a tenant, say. That is a supported part of the contract
+  // rather than an accident of how the dictionary is built, so it is pinned here:
+  // handing over copies instead would break it silently.
+  describe('Update with a three-argument callback that rewrites the criteria ::', function() {
+    var ctx;
+    var mutate;
+
+    before(function(done) {
+      ctx = buildOrm(function(valuesToSet, options, cb) {
+        mutate(options);
+        return cb();
+      }, done);
+    });
+
+    beforeEach(function() {
+      mutate = function() {};
+      ctx.lastQuery = undefined;
+    });
+
+    it('should let the callback change a value in the where clause', function(done) {
+      mutate = function(options) {
+        options.criteria.where.id = 2;
+      };
+
+      ctx.person.update({ id: 1 }, { name: 'test' }, function(err) {
+        if (err) {
+          return done(err);
+        }
+
+        assert.deepEqual(ctx.lastQuery.criteria.where, { id: 2 });
+        return done();
+      });
+    });
+
+    it('should let the callback narrow the where clause with an extra key', function(done) {
+      mutate = function(options) {
+        options.criteria.where.name = 'only this one';
+      };
+
+      ctx.person.update({ id: 1 }, { name: 'test' }, function(err) {
+        if (err) {
+          return done(err);
+        }
+
+        assert.equal(ctx.lastQuery.criteria.where.id, 1);
+        assert.equal(ctx.lastQuery.criteria.where.name, 'only this one');
+        return done();
+      });
+    });
+
+    it('should leave the criteria alone when the callback does not touch it', function(done) {
+      ctx.person.update({ id: 1 }, { name: 'test' }, function(err) {
+        if (err) {
+          return done(err);
+        }
+
+        assert.deepEqual(ctx.lastQuery.criteria.where, { id: 1 });
+        return done();
+      });
+    });
+
+    it('should let the callback change meta', function(done) {
+      mutate = function(options) {
+        options.meta.touchedByBeforeUpdate = true;
+      };
+
+      ctx.person.update({ id: 1 }, { name: 'test' })
+        .meta({ myCustomFlag: 'yep' })
+        .exec(function(err) {
+          if (err) {
+            return done(err);
+          }
+
+          assert.equal(ctx.lastQuery.meta.myCustomFlag, 'yep');
+          assert.equal(ctx.lastQuery.meta.touchedByBeforeUpdate, true);
+          return done();
+        });
+    });
+  });
+
   describe('Update when a two-argument callback errors ::', function() {
     var ctx;
 
