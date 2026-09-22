@@ -126,18 +126,18 @@ describe('After FindOne Lifecycle Callback on findOrCreate::', function() {
       observedRecord = 'not yet called';
     });
 
-    // NOTE: the lookup that findOrCreate performs before creating still fires
-    // `afterFindOne`, handing it `undefined` because nothing matched. The callback
-    // does NOT run again for the record that is then created, so the returned
+    // The lookup findOrCreate does before creating matches nothing, so there is no
+    // record for `afterFindOne` to run against; and the record that is then created
+    // is not one it ran against either. So it does not run at all, and the returned
     // record is untouched by it.
-    it('should run afterFindOne for the failed lookup, with an undefined record', function(done) {
+    it('should not run afterFindOne at all', function(done) {
       person.findOrCreate({ id: 5 }, { id: 5, name: 'New Guy' }, function(err, record, wasCreated) {
         if (err) {
           return done(err);
         }
 
-        assert.equal(timesCalled, 1);
-        assert.equal(observedRecord, undefined);
+        assert.equal(timesCalled, 0);
+        assert.equal(observedRecord, 'not yet called');
         assert.equal(record.name, 'New Guy');
         assert.equal(wasCreated, true);
         return done();
